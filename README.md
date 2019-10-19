@@ -80,10 +80,25 @@ def test_connection_handler_exec(variant):
             wait_for_strings(proc.read, TIMEOUT, 'Existing exec loop.')
 
 def test_install_once():
+  with TestProcess(sys.executable, HELPER, 'test_intall_once') as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT, 'ALREADY_INSTALLED')
 
+def test_install_twice_not_strict():
+  with TestProcess(sys.executable, HELPER, 'test_install_twice_not_strict') as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT,
+        'Not patching os.fork and os.forkpty. Oneshot activation is done by signal')
+      wait_for_strings(proc.read, TIMEOUT, '/tmp/manhole-')
+      uds_path = re.findall(r"(/tmp/manhole-\d+)", proc.read())[0]
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection')
+      assert_manhole_running(proc, uds_path)
 
-
-
+@pytest.mark.xfail('sys.gettrace() and is_module_availabe("gevent") and is_module_available("__pypy__")')
+def test_daemon_connection():
+  with TestProcess(sys.executable, HELPER, 'test_deamon_connection') as proc:
+    wait_for_strings(proc.read, TIMEOUT, '/tmp/manhole-')
+    uds_path = re.findall(r"(/tmp/manhole-\d+)", proc.read())[0]
 
 
 
