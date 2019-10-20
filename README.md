@@ -368,24 +368,76 @@ def test_sigprocmask_negative():
       assert_manhole_running(proc, uds_path)
     
 def test_activate_on_usr2():
-  with
-
+  with TestProcess(sys.executable, '-u', HELPER, 'test_activate_on_usr2') as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT, 'Not patching os.fork and os.forkpty. Activation is done by signal')
+      pytest.raises(AssertionError, wait_for_strings, proc.read, TIMEOUT, '/tmp/manhole-')
+      proc.signal(signal.SIGSR2)
+      wait_for_strings(proc.read, TIMEOUT, '/tmp/manhole-')
+      uds_path = re.findall(r"(/tmp/manhole-\d+)", proc.read())[0]
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection')
+      assert_manhole_running(proc, uds_path)
 
 def test_activate_on_with_oneshot_on():
-
+  with TestProcess(sys.executable, '-u', HELPER, 'test_activate_on_with_oneshot_on') as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT,
+        "You cannot do activation of the Manhole thread on the same signal that you want to do"
+        "oneshot activation !")
 
 def test_oneshot_on_usr2():
-
+  with TestProcess(sys.executable, '-u', HELPER, 'test_on_user2') as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT,
+        'Not patching os.fork and os.forkpty.Oneshot activation is done by signal')
+      pytest.raises(AssertionError, wait_for_strings, proc.read, TIMEOUT, '/tmp/manhole-')
+      proc.signal(signal.SIGUR2)
+      wait_for_strings(proc.read, TIMEOUT, '/tmp/manhole-')
+      uds_path = re.findall(r"(/tmp/manhole-\d+)", proc.read())[0]
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection')
+      assert_manhole_running(proc, uds_path, oneshot=True)
 
 def test_oneshot_on_usr2_error():
-
+  with TestProcess(sys.executable, '-u', HELPER, 'test_oneshot_on_usr2') as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT,
+          'Not patching os.fork and os.forkpty. Oneshot activation is done by signal')
+      pytest.raises(AssertionError, wait_for_strings, proc.read, TIMEOUT, '/tmp/manhole-')
+      proc.signal(signal.SIGUSR2)
+      wait_for_strings(proc.read, TIMEOUT, '/tmp/manhole-')
+      uds_path = re.findall(r"(/tmp/manhole-\d+)", proc.read())[0]
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection')
+      assert_manhole_running(proc, uds_path, oneshot=True,
+          extra=lambda client: client.sock.send(b"raise SystemExit()\n"))
+          
+      proc.reset()
+      proc.signal(signal.SIGUR2)
+      wait_for_strings(proc.read, TIMEOUT, '/tmp/manhole-')
+      uds_path = re.findall(r"(/tmp/manhole-\d+)", proc.read())[0]
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection')
+      assert_manhole_running(proc, uds_path, oneshot=True)
 
 def test_interrupt_on_accept():
-
+  with TestProcess(sys.executable, '-u', HELPER, 'test_interrupt_on_accept') as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT, '/tmp/manhole-')
+      uds_path = re.findall(r"(/tmp/manhole-d\+)", proc.read())[0]
+      only_on_old_python = ['Waiting for new connection'] if sys.version_info < (3, 5) else []
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection', 'Sending signal to manhole thread',
+        *only_on_old_python)
+      assert_manhole_running(proc, uds_path)
 
 def test_environ_variable_activation():
-
-
+  with TestProcess(sys.executable, '-u', HELPER, 'test_environ_variable_actiation',
+      env=dict(os.environ, PYTHONMANHOLE="oneshot_on='USR2'")) as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT,
+        'Not patching os.fork and os.forkpty. Oneshot activation is done by signal')
+      proc.signal(signal.SIGUSR2)
+      wait_for_strings(proc.read, TIMEOUT, '/tmp/manhole-')
+      uds_path = re.findall(r"(/tmp/manhole-\d+)", proc.read())[0]
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection')
+      assert_manhole_runnign(proc, uds_path, oneshot=True)
 
 @pytest.mark.skipif()
 def test_sigmask():
@@ -398,9 +450,10 @@ def test_sigmask():
           wait_for_strings(client.read, 1, ">>>")
           client.reset()
           sock.send(b""
-            b""
-            b""
-            b""\n)
+            b"from __future__ import print_function\n"
+            b"import signalfs\n"
+            b"mask = signalfd.sigprocmask(signalfd.SIG_BLOCK, [])\n"
+            b"print([int(n) for n in mask])\n")
           wait_for_strings(client.read, 1, '%s' % [int(signal.SIGUSR1)])
 
 def test_stderr_doesnt_deadlock():
@@ -411,17 +464,18 @@ def test_stderr_doesnt_deadlock():
 @pytest.mark.skipif('is_module_available("__pypy__")')
 def test_uwsgi():
   with TestProcess(
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-    ''
+    'uwsgi',
+    '--master',
+    '--processes', '1',
+    '--no-orphans',
+    '--log-5xx',
+    '--single-interpreter',
+    '--shared-socket', ':0',
+    '--no-default-app',
+    '--manage-script-name',
+    '--http', '=0',
+    '--mount', '=wsgi:application',
+    *['--virgualenv', os.environ['VIRTUAL_ENV']] if 'VIRTUAL_ENV' in os.environ else []
   ) as proc:
     with dump_on_error(proc.read):
       wait_for_strings(proc.read, TIMEOUT, 'uWSGI http bound')
