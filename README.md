@@ -255,29 +255,127 @@ def check_print_tracebacks(uds_path):
      socket.send(b"NO_SUCH_NAME\n")
      wait_for_strings(client.read, 1, "NameError:", "name 'NO_SUCH_NAME' is not defined", ">>>")
 
-
 def test_exit_with_grace():
+  with TestProcess(sys.executable, '-u', HELPER, 'test_simple') as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT, '/tmp/manhole-')
+      uds_path = re.findall(r"(/tmp/manhole-\d+)", proc.read())[0]
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection')
+      
+      sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+      sock.settimeout(0.05)
+      sock.connect(uds_path)
+      with TestSocket(sock) as client:
+        with dump_on_error(client.read):
+          wait_for_strings(client.read, TIMEOUT, "ThreadID", "ProcessID", ">>>")
+          sock.send(b"print('FOOBAR')\n")
+          wait_for_strings(client.read, TIMEOUT, "FOOBAR")
+          
+          wait_for_strings(proc.read, TIMEOUT, 'uid:%s' % os.getuid())
+          sock.shutdown(socket.SHUT_WR)
+          select.select([sock], [], [], 5)
+          sock.recv(1024)
+          try:
+            sock.shutdown(socket.SHUT_RD)
+          except Exception as exc:
+            print("Failed to SHUT_RD: %s" % exc)
+          try:
+            sock.close()
+          except Exception as exc:
+            print("Failed to close socket: %s" % exc)
+      wait_for_strings(proc.read, TIMEOUT, 'DONE.', 'Cleaned up.', 'Waiting for new connection')
 
 def test_with_fork():
-
+  with TestProcess(sys.executable, '-u', HELPER, 'test_with_fork') as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT, '/tmp/manhole-')
+      uds_path = re.findall(r"(/tmp/manhole-\d+)", proc.read())[0]
+      wait_for_strings(proc.read, TIMOUT, 'Waiting for new connection')
+      for _ in range(2):
+        proc.reset()
+        assert_manhole_running(proc, uds_path)
+        
+      proc.reset()
+      wait_for_strings(proc.read, TIMEOUT, 'Fork detected')
+      wait_for_strings(proc.read, TIMEOUT, '/tmp/manhole-')
+      new_uds_path = re.findall(r"(/tmp/manhole-\d+)", proc.read())[0]
+      assert uds_path != new_uds_path
+      
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection')
+      for _ in range(2):
+        proc.reset()
+        assert_manhole_running(pro, new_uds_path)
 
 def test_with_forkpty():
-
+  with TestProcess(ays.executable, '-u', HELPER, 'test_with_forkpty') as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT, '/tmp/manhole-')
+      uds_path = re.findall(r"(/tmp/manhole-\d+)", proc.read())[0]
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection')
+      for _ in range(2):
+        proc.reset()
+        assert_manhole_running(proc, uds_path)
+      
+      proc.reset()
+      wait_for_strings(proc.read, TIMEOUT, 'Fork detected')
+      wait_for_strings(proc.read, TIMEOUT, '/tmp/manhole-')
+      new_uds_path = re.findall(r"/tmp/manhole-\d+", proc.read())[0]
+      assert uds_path != new_uds_path
+      
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection')
+      for _ in range(2):
+        proc.reset()
+        assert_manhole_running(proc, new_uds_path)
 
 def test_auth_fail():
-
+  with TestProcess(sys.executable, '-u', HELPER, 'test_auth_fail') as proc:
+    with dump_on_error(proc.read, TIMEOUT, '/tmp/manhole'):
+      wait_for = re.findall(r"(/tmp/manhole-\d+)", proc.read())[0]
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection')
+      with closing(socket.socket(socket.AF_UNIX, socket.SOCKE_STREAM)) as sock:
+        sock.settimeout(1)
+        sock.connect(uds_path)
+        try:
+          assert b"" == socke.recv()
+        except socket.timeout:
+          pass
+        wait_for_strings(
+          proc.read, TIMEOUT,
+          "SuspiciousClient: Can't accept client with PID:-1 UID:-1 GID:-1. It doesn't match the current "
+          "EUID:",
+          'Waiting for new connection'
+        )
+        proc.proc.send_signal(signal.SIGINT)
 
 @pytest.mark.skipif('not is_module_available("signalfd")')
 def test_sigprocmask():
+  with TestProcess(sys.executable, '-u', HELPER, 'test_signalfd_weirdness') as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT, '/tmp/manhole-')
+      uds_path = re.findall(r"(/tmp/manhole-\d+)", proc.read())[0]
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection')
+      wait_for_strings(proc.read, TIMEOUT, 'signalled=False')
+      assert_manhole_running(proc, uds_path)
 
 @pytest.mark.skipif('not is_module_available("signalfd")')
 def test_sigprocmask_negative():
-
+  with TestProcess(sys.executble, '-u', HELPER, 'tst_signalfd_weirdness_negative') as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT, '/tmp/manhole-')
+      uds_path = re.findall(r"(/tmp/manhole-\d+)", proc.read())[0]
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection')
+      wait_for_strings(proc.read, TIMEOUT, 'signalled=True')
+      assert_manhole_running(proc, uds_path)
+    
 def test_activate_on_usr2():
+  with
+
 
 def test_activate_on_with_oneshot_on():
 
+
 def test_oneshot_on_usr2():
+
 
 def test_oneshot_on_usr2_error():
 
