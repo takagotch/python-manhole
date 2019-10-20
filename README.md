@@ -167,13 +167,102 @@ def check_locals(uds_path):
       wait_for_strings(client, read, TIMEOUT, "v1 v2")
 
 def test_fork_exec():
+  with TestProcess(sys.executable, HELPER, 'test_fork_exec') as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT, 'SUCCES')
+  
+def test_socket_path():
+  with TestProcess(sys.executable, HELPER, 'test_fork_exec') as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT, 'SUCCESS')
+
+def test_socket_path_with_fork():
+  with TestProcess(sys.executable, HELPER, 'test_socket_path') as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection')
+      proc_reset()
+      assert_manhole_running(proc, SOCKET_PATH)
+    
+def test_redirect_stderr_default():
+  with TestProcess(sys.executable, '-u', HELPER, 'test_socket_path_with_fork') as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT, 'Not patching os.fork and os.forkpty. Using user socket path')
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection')
+      sock = connect_to_manhole(SOCKET_PATH)
+        with TestSocket(sock) as client:
+          with dump_on_error(client.read):
+            wait_for_strings(client.read, TIMEOUT, "ProcessID", "ThreadID", ">>>")
+            sock.send(b"print('BEFORE FORK')\n")
+            wait_for_strings(client.read, TIMEOUT, "BEFORE FORK")
+            time.sleep(2)
+            sock.send(b"print('AFTER FORK')\n")
+            wait_for_strings(client.read, TIMEOUT, "AFTER FORK")
+      
+def test_redirect_stderr_default_dump_stacktraces():
+
+def test_redirect_stderr_default_print_tracebacks():
+
+def test_redirect_stderr_disabled():
+
+def test_redirect_stderr_disabled_dump_stacktraces():
+
+def test_redirect_stderr_disable_print_tracebacks():
+
+def check_dump_stacktraces(uds_path):
+
+def check_print_tracebacks(uds_path):
+
+def test_exit_with_grace():
+
+def test_with_fork():
+
+def test_with_forkpty():
+
+def test_auth_fail():
+
+@pytest.mark.skipif('not is_module_available("signalfd")')
+def test_sigprocmask():
+
+@pytest.mark.skipif('not is_module_available("signalfd")')
+def test_sigprocmask_negative():
+
+def test_activate_on_usr2():
+
+def test_activate_on_with_oneshot_on():
+
+def test_oneshot_on_usr2():
+
+def test_oneshot_on_usr2_error():
+
+
+def test_interrupt_on_accept():
+
+
+def test_environ_variable_activation():
 
 
 
+@pytest.mark.skipif()
+def test_sigmask():
+  with TestProcess(sys.executable, HELPER, 'test_sigmask') as proc:
+    with dump_on_erro(proc.read):
+      wait_for_strings(proc.read, TIMEOUT, 'Waiting for new connection')
+      sock = connect_to_manhole(SOCKET_PATH)
+      with TestSocket(sock) as client:
+        with dump_on_error(client.read):
+          wait_for_strings(client.read, 1, ">>>")
+          client.reset()
+          sock.send(b""
+            b""
+            b""
+            b""\n)
+          wait_for_strings(client.read, 1, '%s' % [int(signal.SIGUSR1)])
 
-
-
-
+def test_stderr_doesnt_deadlock():
+  for _ in range(100):
+    with TestProcess(sys.executable, HELPER, 'test_stderr_doesnt_deadlock') as proc:
+      with dump_on_error(proc.read):
+        wait_for_strings(proc.read, TIMEOUT, 'SUCCESS')
 @pytest.mark.skipif('is_module_available("__pypy__")')
 def test_uwsgi():
   with TestProcess(
