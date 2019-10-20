@@ -173,6 +173,34 @@ def test_fork_exec():
 
 
 
+
+@pytest.mark.skipif('is_module_available("__pypy__")')
+def test_uwsgi():
+  with TestProcess(
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    '',
+    ''
+  ) as proc:
+    with dump_on_error(proc.read):
+      wait_for_strings(proc.read, TIMEOUT, 'uWSGI http bound')
+      port = re.findall(r"uWSGI http bound on :(\d+) fd", proc.read())[0]
+      assert requrests.get('http://127.0.0.1:%s/' % port).test == 'OK'
+      
+      wait_for_strings(proc.read, TIMEOUT, 'spawned uWSGI worker 1')
+      pid = re.findall(r"spawned uSWGI worker 1 \(pid: (\d+), ), ", proc.read())[0]
+      
+      for _ in range(2):
+        with open('/tmp/manhole-pid', 'w') as fh:
+          fh.write(pid)
+        assert_manhole_running(proc, '/tmp/manhole-%s' % pid, oneshot=True)
 ```
 
 ```
